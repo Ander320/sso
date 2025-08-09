@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag a deploy'
+        description: 'Tag to deploy'
         required: true
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest # ОС для runner'а
-    env: # Вводим переменные, которые будем использовать далее
-      HOST: root@87.228.97.162 # логин / хост сервера, на которые деплоим
-      DEPLOY_DIRECTORY: /root/apps/grpc-auth # в какую папку на сервере деплоим
-      CONFIG_PATH: /root/apps/grpc-auth/config/prod.yaml # конфиг сервиса на сервере  
+    runs-on: ubuntu-latest
+    env:
+      HOST: root@185.10.184.27
+      DEPLOY_DIRECTORY: /root/apps/grpc-auth
+      CONFIG_PATH: /root/apps/grpc-auth/config/prod.yaml
 
     steps:
       - name: Checkout repository
@@ -55,19 +55,13 @@ jobs:
         run: |
           echo "Listing deployment folder contents:"
           ls -la ${{ github.workspace }}/deployment
-      - name: Create environment file on server
-        run: |
-          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "touch ${{ env.ENV_FILE_PATH }}"
-          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "chmod 600 ${{ env.ENV_FILE_PATH }}"
-          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "echo 'CONFIG_PATH=${{ env.CONFIG_PATH }}' > ${{ env.ENV_FILE_PATH }}"
-          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "echo 'HTTP_SERVER_PASSWORD=${{ secrets.AUTH_PASS }}' >> ${{ env.ENV_FILE_PATH }}"
       - name: Copy systemd service file
         run: |
           scp -i deploy_key.pem -o StrictHostKeyChecking=no ${{ github.workspace }}/deployment/grpc-auth.service ${{ env.HOST }}:/tmp/grpc-auth.service
           ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "mv /tmp/grpc-auth.service /etc/systemd/system/grpc-auth.service"
       - name: Run migrations
         run: |
-          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "${{ env.DEPLOY_DIRECTORY }}/migrator --storage-path=${{ env.DEPLOY_DIRECTORY }}/sso.db --migration-path=${{ env.DEPLOY_DIRECTORY }}/migrations"
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "${{ env.DEPLOY_DIRECTORY }}/migrator --storage-path=${{ env.DEPLOY_DIRECTORY }}/sso.db --migrations-path=${{ env.DEPLOY_DIRECTORY }}/migrations"
       - name: Start application
         run: |
           ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "systemctl daemon-reload && systemctl restart grpc-auth.service"
